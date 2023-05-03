@@ -1,2 +1,14 @@
-Hi, this is alexkhrist98. I created this repo for my pet projects mostly, but I'm also planning to use it as a showcase for my potetntial employers. 
-Via this repo I'm looking forward to learn more about Git intruments and  get acquinted with practices of development. 
+This repo contains source code for my pet project. Further updates may be commited here in the future.
+
+FEATURES:
+-User authentication using Telegram bot API capacities
+-Scheduled notifications and checking if the user has taken a pill
+-Users are able to unsubscribe from the notifications if they want so.
+
+TECHSTACK:
+-Python 3.11 (with strong use of asyncio adn threading)
+-sqlite3.
+-PyTelegramBotAPI
+
+DEPLOYMENT SUGGESTIONS:
+The bot can be easily deployed with Docker.
