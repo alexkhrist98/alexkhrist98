@@ -11,7 +11,7 @@ from dblogic import *
 import re
 import schedule
 import threading
-
+import datetime
 
 dotenv.load()
 API_KEY = os.getenv("TOKEN")
@@ -190,7 +190,14 @@ def time_logic():
 
 #waits for user input
 async def main():
-    await mybot.polling()
+    try:
+        await mybot.polling(request_timeout=150, non_stop=True)
+    except:
+        await asyncio.sleep(1)
+        asyncio.create_task(main())
+
+
+
 
 if __name__ == "__main__":
     time_logic_thread = threading.Thread(target=time_logic)
