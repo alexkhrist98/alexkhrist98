@@ -51,23 +51,27 @@ async def start(message):
 #registration step 2
 @mybot.message_handler(regexp=r'\d')
 async def getnuminc(message: types.Message):
-    print("Get numinc started for " + str(message.from_user.id))
-    for i in registry_list:
-        if i.get_userid() == message.from_user.id:
-            i.set_numinc(int(message.text))
-            await mybot.send_message(i.userid, 'Спасибо)')
-            await mybot.send_message(i.userid, 'А теперь скажи, пила ли ты сегодня таблетку?')
-        else:
-            print('Pass')
-            pass
+    data = getuser(message.from_user.id)
+    if data:
+        await set_new_numinc(message)
+    else:
+        print("Get numinc started for " + str(message.from_user.id))
+        for i in registry_list:
+            if i.get_userid() == message.from_user.id:
+                i.set_numinc(int(message.text))
+                await mybot.send_message(i.userid, 'Спасибо)')
+                await mybot.send_message(i.userid, 'А теперь скажи, пила ли ты сегодня таблетку?')
+            else:
+                print('Pass')
+                pass
 
 #registration step 3
 @mybot.message_handler(regexp=r'[данетДАНЕТ]')
 async def gettakepill(message):
     print("Gettakepil started forl" + str(message.from_user.id))
     data = getuser(message.from_user.id)
-    if data != [] and message.text.lower() == 'да':
-        girl = Girlclass.Girl('', False, False, 0).fromtuple(data[0])
+    if data and message.text.lower() == 'да':
+        girl = Girlclass.Girl().fromtuple(data[0])
         if girl.get_takepill() == True or girl.get_mustpill() == False:
             await mybot.send_message(girl.get_userid(), "Мур-мур, ты уже выпила таблетку)")
         else:
@@ -120,6 +124,8 @@ async def help(message: types.Message):
     ВНИМАНИЕ! ВСЯ ИНФОРМАЦИЯ В ЭТОМ БОТЕ НЕ ЯВЛЯЕТСЯ РЕКОМЕНДАЦИЕЙ ВРАЧА! Пожалуйста, относись ответственно к своему здоровь)\n
     Команды:\n
     /start - регистрация в боте
+    /cdnuminc - изменить номер дня в цикле
+    /me - узнать, что записано в боте о тебе
     /delete - удалить свои данные из бота и отписаться от уведомлений\n
     
     Контакт создателя:\n
@@ -130,6 +136,57 @@ async def delete(message):
     print(str(message.from_user.id) + 'requested a removal from database')
     deleteuser(message.from_user.id)
     await mybot.send_message(message.from_user.id, "Мы удалили твои данные и больше не будем присылать уведомления")
+
+@mybot.message_handler(commands=['me'])
+async def me(message):
+    data = getuser(message.from_user.id)
+    if data:
+        girl = Girlclass.Girl().fromtuple(data[0])
+        if girl.get_takepill() == False and girl.get_mustpill == True:
+            await mybot.send_message(girl.get_userid(), f'''Ты зарегистрирована! Твой день в цикле - {girl.get_numinc()}
+Сегодня ты должна выпить таблетку, но ещё её не выпила. Отправь да, когда её выпьешь''')
+        elif girl.get_takepill == True:
+            await mybot.send_message(girl.get_userid, f'Ты зарегистрирована! Твой день в цикле - {girl.get_numinc()} '
+                                                      f'и ты уже выпила таблетку')
+        elif girl.get_mustpill() == False:
+            await mybot.send_message(girl.get_userid(), f'''Ты зарегистрирована! твой день в цикле - {girl.get_numinc()}
+и сегодня тебе НЕ НУЖНО пить таблетку''')
+        else:
+            await mybot.send_message(girl.get_userid(), f'Ты зарегистрирована! Твой номер в цикле - {girl.get_numinc()}')
+    else:
+        await mybot.send_message(message.from_user.id, 'Ты не зарегистрирована.')
+
+@mybot.message_handler(commands=['cdnuminc'])
+async def cdnuminc(message):
+    await mybot.send_message(message.from_user.id, 'Отправь новый день в цикле числом (например - 13)')
+
+@mybot.message_handler(regexp="\d")
+async def set_new_numinc(message):
+    data = getuser(message.from_user.id)
+    if data:
+        girl = Girlclass.Girl().fromtuple(data[0])
+        new_numinc = int(message.text)
+        girl.set_numinc(new_numinc)
+        girl.set_mustpill_from_numinc()
+        updateuser(girl)
+        await mybot.send_message(girl.get_userid(), f'Отлично! Теперь твой номер в цикле - {girl.get_numinc()}')
+
+#coroutine that updates parameters for all users
+async def updater():
+    data = fetchallusers()
+    girls = []
+    if data == []:
+        pass
+    else:
+        for i in data:
+            girls.append(Girlclass.Girl().fromtuple(i))
+
+    if girls != []:
+        for i in girls:
+            i.set_takepill(False)
+            i.add_numinc(1)
+            i.set_mustpill_from_numinc()
+            updateuser(i)
 
 
 #notification logic
@@ -146,10 +203,7 @@ async def sender():
     if girls != []:
         for i in girls:
                 print("Notifications are being sent to" + i.get_userid())
-                i.set_takepill(False)
-                i.add_numinc(1)
-                i.set_mustpill_from_numinc()
-                updateuser(i)
+
                 if i.get_mustpill() == True:
                     await mybot.send_message(i.get_userid(), 'Доброе утро) Не забудь Выпить таблетку')
                 elif i.get_mustpill() == False:
@@ -172,7 +226,7 @@ async def check_takepill():
             if girls == []:
                 pass
             else:
-                if girl.get_takepill() == True:
+                if girl.get_takepill() == True or girl.get_mustpill() == False:
                     pass
                 else:
                     await mybot.send_message(girl.get_userid(), 'Мне кажется, ты забыла выпить таблетку. Напиши "да", когда её выпьешь)')
@@ -182,6 +236,7 @@ async def check_takepill():
 def time_logic():
     timer = schedule.Scheduler()
     print("Scheduler started")
+    timer.every().day.at('00:00').do(lambda: loop.create_task(updater()))
     timer.every().day.at("05:30").do(lambda: loop.create_task(sender()))
     timer.every().day.at("07:00").do(lambda: loop.create_task(check_takepill()))
     while True:
@@ -194,7 +249,7 @@ async def main():
         await mybot.polling(request_timeout=150, non_stop=True)
     except:
         await asyncio.sleep(1)
-        asyncio.create_task(main())
+        loop.create_task(main())
 
 
 
