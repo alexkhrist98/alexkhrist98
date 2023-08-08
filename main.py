@@ -1,4 +1,8 @@
+#|I have revised the code of this project and found out that it smells very badly. If you're a potential employer, please
+#check out my other porojects.
+
 #this file contains main bot logic. The functions are groups in sections
+
 import telebot
 from telebot.async_telebot import AsyncTeleBot
 from telebot import types
@@ -12,6 +16,7 @@ import re
 import schedule
 import threading
 import datetime
+from telebot.async_telebot import types
 
 dotenv.load()
 API_KEY = os.getenv("TOKEN")
@@ -52,6 +57,7 @@ async def start(message):
 @mybot.message_handler(regexp=r'\d')
 async def getnuminc(message: types.Message):
     data = getuser(message.from_user.id)
+    keyboard = await create_keyboard()
     if data:
         await set_new_numinc(message)
     else:
@@ -60,7 +66,7 @@ async def getnuminc(message: types.Message):
             if i.get_userid() == message.from_user.id:
                 i.set_numinc(int(message.text))
                 await mybot.send_message(i.userid, 'Спасибо)')
-                await mybot.send_message(i.userid, 'А теперь скажи, пила ли ты сегодня таблетку?')
+                await mybot.send_message(i.userid, 'А теперь скажи, пила ли ты сегодня таблетку?', reply_markup=keyboard)
             else:
                 print('Pass')
                 pass
@@ -73,12 +79,18 @@ async def gettakepill(message):
     if data and message.text.lower() == 'да':
         girl = Girlclass.Girl().fromtuple(data[0])
         if girl.get_takepill() == True or girl.get_mustpill() == False:
-            await mybot.send_message(girl.get_userid(), "Мур-мур, ты уже выпила таблетку)")
+            try:
+                await mybot.send_message(girl.get_userid(), "Мур-мур, ты уже выпила таблетку)")
+            except telebot.apihelper.ApiTelegramException:
+                deleteuser(girl.userid)
         else:
             girl.set_takepill(True)
 
-            await mybot.send_message(girl.get_userid(), 'Хорошо, спасибо, я запомнил')
-            updateuser(girl)
+            try:
+                await mybot.send_message(girl.get_userid(), 'Хорошо, спасибо, я запомнил')
+                updateuser(girl)
+            except telebot.apihelper.ApiTelegramException:
+                deleteuser(girl.userid)
 
     for i in registry_list:
         if i.get_userid() == message.from_user.id:
@@ -96,6 +108,31 @@ async def gettakepill(message):
             print('Pass')
             pass
 
+#This handler handles the input from an inline keyborad, created with create_keyborad() coroutine
+@mybot.callback_query_handler(func=lambda call: True)
+async def set_takepill_from_keyboard(call: types.CallbackQuery):
+    data = getuser(call.from_user.id)
+    if data:
+        girl = Girlclass.Girl().fromtuple(data[0])
+        if call.data == "true":
+            girl.takepill = True
+            await mybot.send_message(girl.userid, "Отлично, спасибо!)")
+            updateuser(girl)
+        elif call.data == 'false':
+            await mybot.send_message(girl.userid, "Хорошо, я напомню о ней через час.")
+            await asyncio.sleep(3600)
+            await check_takepill()
+    else:
+        for i in registry_list:
+            if i.userid == call.from_user.id:
+                if call.data == "true":
+                    i.takepill = True
+                    await mybot.send_message(i.userid, "Отлично, спасибо!)")
+                    await getmustpill()
+                elif call.data == 'false':
+                    i.takepill = False
+                    await mybot.send_message(i.userid, "Хорошо, я наопмню о ней через час, если сегодня её нужно пить")
+                    await getmustpill()
 
 async def getmustpill():
     for i in registry_list:
@@ -188,36 +225,50 @@ async def updater():
             i.set_mustpill_from_numinc()
             updateuser(i)
 
+#this function creates a keyboard with yes and no replies
+async def create_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+    button_true = types.InlineKeyboardButton(text="Да", callback_data="true", color="positive")
+    button_false = types.InlineKeyboardButton(text="Нет", callback_data="false", color="negative")
+    keyboard.add(button_true, button_false)
+    return keyboard
+
 
 #notification logic
 async def sender():
     print("Sending messages")
     data = fetchallusers()
     girls = []
-
-    if data != []:
+    keyboard = await create_keyboard()
+    if data:
         for i in data:
             girl = Girlclass.Girl().fromtuple(i)
             girls.append(girl)
 
     if girls != []:
         for i in girls:
-                print("Notifications are being sent to" + i.get_userid())
+                print("Notifications are being sent to" + str(i.get_userid()))
 
                 if i.get_mustpill() == True:
-                    await mybot.send_message(i.get_userid(), 'Доброе утро) Не забудь Выпить таблетку')
+                    try:
+                        await mybot.send_message(i.get_userid(), 'Доброе утро) Не забудь Выпить таблетку', reply_markup=keyboard)
+                    except telebot.apihelper.ApiTelegramException:
+                        deleteuser(i.userid)
                 elif i.get_mustpill() == False:
-                    await mybot.send_message(i.get_userid(), "Доброе утро) Сегодня пить ничего не надо, так что просто желаю тебе отличного дня)")
-
+                    try:
+                        await mybot.send_message(i.get_userid(), "Доброе утро) Сегодня пить ничего не надо, так что просто желаю тебе отличного дня)")
+                    except telebot.apihelper.ApiTelegramException:
+                        deleteuser(i.userid)
 
 
 #takepill checker
 async def check_takepill():
     print("Checking takepill for users")
+    keyboard = await create_keyboard()
     data = fetchallusers()
     girls = []
     for i in data:
-        if girls == {}:
+        if not data:
             pass
         else:
             girls.append(Girlclass.Girl().fromtuple(i))
@@ -229,11 +280,17 @@ async def check_takepill():
                 if girl.get_takepill() == True or girl.get_mustpill() == False:
                     pass
                 else:
-                    await mybot.send_message(girl.get_userid(), 'Мне кажется, ты забыла выпить таблетку. Напиши "да", когда её выпьешь)')
+                    try:
+                        await mybot.send_message(girl.get_userid(), 'Мне кажется, ты забыла выпить таблетку. Напиши "да", когда её выпьешь)', \
+                                                 reply_markup=keyboard)
+                    except telebot.apihelper.ApiTelegramException:
+                        deleteuser(girl.userid)
+
 
 #Scheduler that is responsible for time tracking. RUns in a separate thread.
 #adds tasks to event loop in the main thread
 def time_logic():
+    global timer
     timer = schedule.Scheduler()
     print("Scheduler started")
     timer.every().day.at('00:00').do(lambda: loop.create_task(updater()))
@@ -242,6 +299,18 @@ def time_logic():
     while True:
         timer.run_pending()
 
+#this function sends notifications to all users after bot was restarted
+async def reboot_alert():
+    data = fetchallusers()
+    if data:
+        for i in data:
+            girl = Girlclass.Girl().fromtuple(i)
+            try:
+                await mybot.send_message(girl.userid, "ВНИМАНИЕ! \n"
+                                                      "Бот вернулся в эфир после технического перерыва. Пожалуйста, проверьте свои данные."
+                                                      "Используйте /me")
+            except telebot.apihelper.ApiTelegramException:
+                deleteuser(girl.userid)
 
 #waits for user input
 async def main():
@@ -259,4 +328,5 @@ if __name__ == "__main__":
     time_logic_thread.start()
     loop = asyncio.get_event_loop()
     loop.create_task(main())
+    loop.create_task(reboot_alert())
     loop.run_forever()
