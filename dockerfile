@@ -5,4 +5,4 @@ COPY main.py .
 COPY Girlclass.py .
 COPY dblogic.py .
 ENV TZ=Europe/Moscow
-CMD python main.py
+CMD python3 main.py

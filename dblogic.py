@@ -56,7 +56,6 @@ def updateuser(object: Girlclass.Girl):
         cursor = con.cursor()
         cursor.execute('UPDATE girls SET takepill = %s, mustpill = %s, numinc = %s WHERE userid = %s', (takepill, mustpill, numinc, userid))
         con.commit()
-        print("Update complete fo -r" + object.get_userid())
 #Creates a database and a table
 if __name__ != '__main__':
     with psycopg2.connect(database=name, user=dbuser, password=dbpass, host=dbhost) as con:
